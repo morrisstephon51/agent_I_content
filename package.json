@@ -1,0 +1,20 @@
+{
+  "name": "agent-i-content",
+  "version": "1.0.0",
+  "description": "AI content pipeline agent for The Plug AI",
+  "main": "agents/content-pipeline/index.ts",
+  "scripts": {
+    "generate": "ts-node agents/content-pipeline/index.ts",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@supabase/supabase-js": "^2.49.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  }
+}
