@@ -52,6 +52,47 @@ export function enforceCaptionLimit(caption: string, limit: number): string {
   return `${body.trimEnd()}${ELLIPSIS}`;
 }
 
+/**
+ * Enforce STRICT RULE #1 in code: hashtags must be semantically derived from the
+ * topic text, not invented "trending" noise. The prompt already asks for this,
+ * but the model still occasionally emits generic reach tags (#fyp, #viral,
+ * #trending) that read as inauthentic for a community brand and would otherwise
+ * flow straight into Supabase text_outputs and the Remotion payload. This mirrors
+ * the way caption length and the <=30-char / <=5-count hashtag rules are already
+ * clamped in code below (the topic-word set was even built here, but never used).
+ *
+ * A tag is kept when it shares a token with the topic in EITHER direction (so a
+ * concatenated tag like "ailiteracyworkshop" still matches the topic word
+ * "literacy", and an abbreviation like "instruct" matches "instructional") or is
+ * a known brand handle. To avoid ever over-correcting a post down to zero
+ * hashtags, if nothing verifies as topic-derived we keep the model's tags
+ * unchanged — this is strictly a noise filter, never a regression.
+ */
+export function filterTopicHashtags(hashtags: string[], topic: string): string[] {
+  const topicWords = new Set(
+    topic
+      .toLowerCase()
+      .split(/\s+/)
+      .map((w) => w.replace(/[^a-z0-9]/g, ''))
+      .filter((w) => w.length > 2)
+  );
+  // The Plug AI's own handles are always authentic regardless of topic wording.
+  const BRAND_HANDLES = new Set(['theplugai', 'plugai']);
+
+  const isTopical = (tag: string): boolean => {
+    const norm = tag.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!norm) return false;
+    if (BRAND_HANDLES.has(norm)) return true;
+    for (const w of topicWords) {
+      if (norm.includes(w) || w.includes(norm)) return true;
+    }
+    return false;
+  };
+
+  const kept = hashtags.filter(isTopical);
+  return kept.length > 0 ? kept : hashtags;
+}
+
 function buildPrompt(input: AgentInput): string {
   const platformList = input.platforms
     .map((p) => `- ${p.toUpperCase()}: ${PLATFORM_GUIDELINES[p]}`)
@@ -126,15 +167,6 @@ export async function generateContent(
     throw new Error('Claude response missing posts array');
   }
 
-  // Validate hashtags contain no banned patterns (non-topic noise)
-  const topicWords = new Set(
-    input.topic
-      .toLowerCase()
-      .split(/\s+/)
-      .map((w) => w.replace(/[^a-z0-9]/g, ''))
-      .filter((w) => w.length > 2)
-  );
-
   parsed.posts = parsed.posts.map((post) => {
     const limit = CAPTION_LIMITS[post.platform];
     const caption = enforceCaptionLimit(post.caption, limit);
@@ -148,10 +180,12 @@ export async function generateContent(
     return {
       ...post,
       caption,
-      hashtags: post.hashtags
-        .map((h) => h.replace(/^#/, '').replace(/\s+/g, ''))
-        .filter((h) => h.length <= 30)
-        .slice(0, 5),
+      hashtags: filterTopicHashtags(
+        (post.hashtags ?? [])
+          .map((h) => h.replace(/^#/, '').replace(/\s+/g, ''))
+          .filter((h) => h.length > 0 && h.length <= 30),
+        input.topic
+      ).slice(0, 5),
     };
   });
 
