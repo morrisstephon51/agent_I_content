@@ -21,6 +21,37 @@ const PLATFORM_GUIDELINES: Record<Platform, string> = {
   youtube: 'Hook is the video title styled as a promise ("How to..." or "Why..."). Caption is a short description under 200 chars. 3 hashtags.',
 };
 
+/**
+ * Enforce a platform caption character limit in code.
+ *
+ * The prompt asks the model to respect CAPTION_LIMITS, but LLMs routinely
+ * overshoot the tighter limits (TikTok 150, YouTube 200). An over-length
+ * caption would otherwise flow straight into Supabase text_outputs and the
+ * Remotion video payload, breaking the video layout or getting rejected by
+ * the platform at publish time — so we clamp it here, the same way hashtags
+ * are already clamped below.
+ *
+ * Truncates at a word boundary where possible and appends an ellipsis, and
+ * always returns a string whose length is <= `limit`.
+ */
+export function enforceCaptionLimit(caption: string, limit: number): string {
+  const trimmed = caption.trim();
+  if (trimmed.length <= limit) return trimmed;
+
+  const ELLIPSIS = '\u2026'; // single UTF-16 code unit, so length 1
+  const budget = limit - ELLIPSIS.length;
+  if (budget <= 0) {
+    // Pathologically small limit - hard-truncate to fit.
+    return trimmed.slice(0, limit);
+  }
+
+  const slice = trimmed.slice(0, budget);
+  // Prefer cutting at the last space so we don't split a word mid-way.
+  const lastSpace = slice.lastIndexOf(' ');
+  const body = lastSpace > 0 ? slice.slice(0, lastSpace) : slice;
+  return `${body.trimEnd()}${ELLIPSIS}`;
+}
+
 function buildPrompt(input: AgentInput): string {
   const platformList = input.platforms
     .map((p) => `- ${p.toUpperCase()}: ${PLATFORM_GUIDELINES[p]}`)
@@ -104,13 +135,25 @@ export async function generateContent(
       .filter((w) => w.length > 2)
   );
 
-  parsed.posts = parsed.posts.map((post) => ({
-    ...post,
-    hashtags: post.hashtags
-      .map((h) => h.replace(/^#/, '').replace(/\s+/g, ''))
-      .filter((h) => h.length <= 30)
-      .slice(0, 5),
-  }));
+  parsed.posts = parsed.posts.map((post) => {
+    const limit = CAPTION_LIMITS[post.platform];
+    const caption = enforceCaptionLimit(post.caption, limit);
+    if (caption.length < post.caption.trim().length) {
+      console.warn(
+        `\u26a0\ufe0f  ${post.platform} caption exceeded ${limit} chars ` +
+          `(model returned ${post.caption.trim().length}) \u2014 truncated to fit.`
+      );
+    }
+
+    return {
+      ...post,
+      caption,
+      hashtags: post.hashtags
+        .map((h) => h.replace(/^#/, '').replace(/\s+/g, ''))
+        .filter((h) => h.length <= 30)
+        .slice(0, 5),
+    };
+  });
 
   // Log token usage for cost awareness
   const inputTokens = response.usage.input_tokens;
