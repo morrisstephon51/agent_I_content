@@ -37,7 +37,7 @@ export const PLATFORM_FRAMES: Record<Platform, number> = {
   youtube: 270,    // 9s
 };
 
-// Character limits per platform (enforced in prompt)
+// Character limits per platform (enforced in the prompt AND in code via enforceCaptionLimit)
 export const CAPTION_LIMITS: Record<Platform, number> = {
   instagram: 2200,
   tiktok: 150,
