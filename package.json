@@ -6,7 +6,7 @@
   "scripts": {
     "generate": "ts-node agents/content-pipeline/index.ts",
     "build": "tsc --noEmit",
-    "test": "ts-node agents/content-pipeline/caption-limit.test.ts"
+    "test": "ts-node agents/content-pipeline/caption-limit.test.ts && ts-node agents/content-pipeline/hashtag-filter.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
