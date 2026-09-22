@@ -5,7 +5,8 @@
   "main": "agents/content-pipeline/index.ts",
   "scripts": {
     "generate": "ts-node agents/content-pipeline/index.ts",
-    "build": "tsc --noEmit"
+    "build": "tsc --noEmit",
+    "test": "ts-node scripts/run-tests.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
