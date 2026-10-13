@@ -108,7 +108,7 @@ export async function generateContent(
     ...post,
     hashtags: post.hashtags
       .map((h) => h.replace(/^#/, '').replace(/\s+/g, ''))
-      .filter((h) => h.length <= 30)
+      .filter((h) => h.length > 0 && h.length <= 30)
       .slice(0, 5),
   }));
 
