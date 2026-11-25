@@ -6,6 +6,7 @@ import {
   PlatformPost,
   CAPTION_LIMITS,
 } from './types';
+import { coercePosts, extractJson } from './coerce';
 
 const BRAND_VOICE = `
 Brand: The Plug AI
@@ -82,18 +83,9 @@ export async function generateContent(
 
   const raw = (response.content[0] as { type: string; text: string }).text.trim();
 
-  let parsed: { posts: PlatformPost[] };
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    // Strip any accidental markdown fences if model adds them
-    const cleaned = raw.replace(/^```json\n?/, '').replace(/\n?```$/, '');
-    parsed = JSON.parse(cleaned);
-  }
-
-  if (!parsed.posts || !Array.isArray(parsed.posts)) {
-    throw new Error('Claude response missing posts array');
-  }
+  // Model JSON is untrusted: extract it, then coerce each post to PlatformPost
+  // so one malformed field can't throw away the whole run (see coerce.ts).
+  const parsed: { posts: PlatformPost[] } = { posts: coercePosts(extractJson(raw)) };
 
   // Validate hashtags contain no banned patterns (non-topic noise)
   const topicWords = new Set(
